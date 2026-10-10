@@ -1,12 +1,10 @@
-# Pipeline Olist — dados do curso
+# Pipeline Olist — Projeto 1
 
-Os dados do curso **Pipeline Olist**: quatro encontros de 1h20 construindo um pipeline
+Os dados do curso **Pipeline Olist**: construindo um pipeline
 de ponta a ponta, do CSV ao dashboard, sobre vendas reais do e-commerce brasileiro.
 
-Este repositório guarda **só os dados**. O código você escreve durante as aulas.
-
 📖 **Guia do curso:** [ckoliveiraa.github.io/pipeline-olist](https://ckoliveiraa.github.io/pipeline-olist/guia-olist.html)
-— o roteiro das quatro aulas, publicado via GitHub Pages a partir de [`docs/`](docs/).
+— o roteiro das quatro etapas, publicado via GitHub Pages a partir de [`docs/`](docs/).
 
 ## O que tem aqui
 
@@ -32,9 +30,6 @@ está certo.
 ```bash
 git clone https://github.com/ckoliveiraa/pipeline-olist.git
 ```
-
-**Não precisa descompactar.** O pandas lê `.csv.gz` direto, do mesmo jeito que leria
-um `.csv`:
 
 ```python
 import pandas as pd
