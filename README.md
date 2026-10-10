@@ -22,9 +22,6 @@ Nove arquivos em `raw/`, comprimidos com gzip — 1.550.922 registros no total:
 | `olist_sellers_dataset.csv.gz` | 3.095 |
 | `product_category_name_translation.csv.gz` | 71 |
 
-Use esta tabela para conferir sua ingestão: se o número na sua tela bate com o daqui,
-está certo.
-
 ## Como usar
 
 ```bash
@@ -42,15 +39,9 @@ O DuckDB também:
 SELECT * FROM read_csv_auto('raw/olist_orders_dataset.csv.gz') LIMIT 5;
 ```
 
-São 42 MB comprimidos contra 121 MB crus, e nenhum arquivo passa do limite em que o
-GitHub começa a reclamar. O `.gitignore` ignora `raw/*.csv` justamente para ninguém
-commitar a versão descompactada sem querer.
-
 ## Uma regra
 
-Nunca edite nada dentro de `raw/`. É a fonte da verdade. Abrir um CSV no Excel e
-salvar faz o Excel reescrever datas e números no formato dele, e a partir daí o
-pipeline inteiro passa a mentir — em silêncio, que é o pior jeito.
+Nunca edite nada dentro de `raw/`. 
 
 ## Origem e licença
 
