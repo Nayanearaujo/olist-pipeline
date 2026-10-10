@@ -3,7 +3,6 @@
 -- Notebook do DuckDB: UMA CÉLULA POR BLOCO abaixo, com o banco "olist" selecionado.
 -- Copie cada bloco, do primeiro "--" até o ";" final, para uma célula nova.
 -- No raw tudo é texto (VARCHAR): por isso os TRY_CAST. Valor inválido vira NULL
--- em vez de derrubar a consulta. A conversão definitiva é a etapa 2 do curso.
 -- ============================================================================
 
 
