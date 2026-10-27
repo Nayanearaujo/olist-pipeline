@@ -9,7 +9,7 @@ WITH pedidos_por_pessoa AS (
     -- grao: uma pessoa, com quantos pedidos validos ela fez
     SELECT
         c.cliente_unico_id,
-        COUNT(*) AS pedidos
+        COUNT(*) AS qtd_pedidos
     FROM refined.pedidos  AS p
     JOIN refined.clientes AS c ON c.cliente_id = p.cliente_id
     WHERE p.status NOT IN ('canceled', 'unavailable')
@@ -18,9 +18,9 @@ WITH pedidos_por_pessoa AS (
 
 -- grao: uma quantidade de pedidos. pct sobre o total de pessoas (janela vazia).
 SELECT
-    pedidos                                               AS pedidos_por_cliente,
+    qtd_pedidos                                           AS pedidos_por_cliente,
     COUNT(*)                                              AS clientes,
     ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2)    AS pct_clientes
 FROM pedidos_por_pessoa
-GROUP BY pedidos
-ORDER BY pedidos;
+GROUP BY qtd_pedidos
+ORDER BY qtd_pedidos;

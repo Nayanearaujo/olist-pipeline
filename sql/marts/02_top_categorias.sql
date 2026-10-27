@@ -18,5 +18,5 @@ JOIN refined.itens_pedido     AS i  ON i.pedido_id = p.pedido_id
 LEFT JOIN refined.produtos    AS pr ON pr.produto_id = i.produto_id
 LEFT JOIN refined.traducao_categorias AS tr ON tr.categoria = pr.categoria
 WHERE p.status NOT IN ('canceled', 'unavailable')
-GROUP BY categoria
+GROUP BY COALESCE(tr.categoria_en, pr.categoria, 'sem_categoria')
 ORDER BY receita DESC;
