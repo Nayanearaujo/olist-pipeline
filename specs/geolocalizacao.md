@@ -1,4 +1,15 @@
-CONTEXTO
+# Spec: transformação de raw.geolocalizacao para refined.geolocalizacao
+
+## Resumo
+
+- Transforma `raw.geolocalizacao` em `refined.geolocalizacao`: tipa e trata, sem mudar o significado do dado.
+- O grão é a observação de GPS: uma linha é um ponto coletado, com prefixo de CEP, coordenada, cidade e UF.
+- A tabela não tem chave única natural: nenhum candidato de coluna chega ao total de linhas.
+- Não há agregação aqui; agregar por CEP, cidade ou estado é trabalho da camada mart.
+- Contagens: 1.000.163 linhas de entrada, 738.332 distintas, 261.831 duplicatas removidas.
+
+## Contexto
+
 Estou construindo um pipeline de dados em Python sobre o dataset público da Olist,
 o e-commerce brasileiro, com dados de 2016 a 2018. Trabalho com spec-driven
 development: esta spec é a fonte da verdade, e o código vem depois dela. Não
@@ -11,44 +22,50 @@ inválido. Refined NÃO agrega, NÃO junta tabela e NÃO calcula métrica. Agreg
 CEP, por cidade ou por estado é trabalho da camada mart, não desta.
 
 Todos os números citados abaixo foram contados por mim, direto na tabela
-raw.geolocalizacao, usando apenas consultas de leitura. Nada foi gravado, nada em
+`raw.geolocalizacao`, usando apenas consultas de leitura. Nada foi gravado, nada em
 raw foi alterado.
 
-STACK
+## Stack
+
 - Python 3.13, dependências com uv
 - DuckDB, arquivo olist.duckdb na raiz do projeto
 - Sem orquestrador. Script rodado pela linha de comando.
 
-O QUE JÁ EXISTE (usar, não reescrever)
-pipeline/db.py já oferece:
-  conectar()                abre o olist.duckdb e cria o arquivo se faltar
-  criar_schema(con, nome)   CREATE SCHEMA IF NOT EXISTS
+## O que já existe (usar, não reescrever)
+
+`pipeline/db.py` já oferece:
+
+- `conectar()`: abre o olist.duckdb e cria o arquivo se faltar
+- `criar_schema(con, nome)`: CREATE SCHEMA IF NOT EXISTS
+
 O schema raw veio da etapa de ingestão: nove tabelas, todas as colunas em VARCHAR,
 campo vazio virando NULL.
 
-ARTEFATO QUE ESTA SPEC DESCREVE
-Uma transformação de raw.geolocalizacao para refined.geolocalizacao. A geolocalização
-não entra no pipeline do curso e nenhum mart usa ela, então aqui eu entrego só a
-spec. A implementação futura, se acontecer, seria pipeline/geolocalizacao.py.
+## Artefato que esta spec descreve
 
+Uma transformação de `raw.geolocalizacao` para `refined.geolocalizacao`. A
+geolocalização não entra no pipeline do curso e nenhum mart usa ela, então aqui eu
+entrego só a spec. A implementação futura, se acontecer, seria
+`pipeline/geolocalizacao.py`.
 
-SPEC
+## 0. O grão: o que uma linha representa
 
-0. O GRAO: O QUE UMA LINHA REPRESENTA
 Antes de qualquer decisão, a pergunta que define tudo: o que é uma linha desta tabela?
 
 Uma linha é uma observação de GPS de um ponto, com o prefixo de CEP, a coordenada
 (latitude e longitude), a cidade e a UF daquele ponto. Não é um CEP, não é uma
 cidade, não é um endereço. É um registro de coleta de um ponto no mapa.
 
-Isso importa porque a tabela NÃO tem chave única natural. Testei cada candidato,
+Isso importa porque a tabela não tem chave única natural. Testei cada candidato,
 contando os valores distintos e comparando com o total de 1.000.163 linhas:
 
-  cep_prefixo          19.015 distintos   não é chave (cada prefixo cobre uma área)
-  coordenada (lat,lng) 718.463 distintos  não é chave
-  cep + coordenada     720.154 distintos  não é chave
-  cep + cidade + uf    27.912 distintos   não é chave
-  linha inteira        738.332 distintos  não é chave (sobram 261.831 repetições)
+| Candidato | Valores distintos | É chave? |
+|---|---|---|
+| cep_prefixo | 19.015 | Não (cada prefixo cobre uma área) |
+| coordenada (lat, lng) | 718.463 | Não |
+| cep + coordenada | 720.154 | Não |
+| cep + cidade + uf | 27.912 | Não |
+| linha inteira | 738.332 | Não (sobram 261.831 repetições) |
 
 Nenhum candidato chega perto do total de linhas. Nem a linha inteira é única, porque
 a mesma observação completa se repete. Então o grão de trabalho desta transformação
@@ -56,36 +73,43 @@ a mesma observação completa se repete. Então o grão de trabalho desta transf
 A dedup remove só a repetição exata da linha inteira. Não escolho uma linha por CEP
 nem uma por coordenada, porque isso seria agregar, e agregar é camada mart.
 
-1. ESCOPO
-Lê de raw.geolocalizacao e escreve em refined.geolocalizacao. Nunca escreve em raw.
-Só essa tabela entra nesta spec. As outras oito tabelas do schema raw ficam de fora
-porque já têm as suas próprias specs de transformação. Aqui eu trato a tabela que
-ficou pendente, que é a de maior volume do projeto: 1.000.163 linhas, contra 99.441
-da segunda maior. É por isso que ela merece uma spec só dela.
+## 1. Escopo
 
-2. NOMES DAS COLUNAS
+Lê de `raw.geolocalizacao` e escreve em `refined.geolocalizacao`. Nunca escreve em
+raw. Só essa tabela entra nesta spec. As outras oito tabelas do schema raw ficam de
+fora porque já têm as suas próprias specs de transformação. Aqui eu trato a tabela
+que ficou pendente, que é a de maior volume do projeto: 1.000.163 linhas, contra
+99.441 da segunda maior. É por isso que ela merece uma spec só dela.
+
+## 2. Nomes das colunas
+
 Renomear tudo para português, em snake_case, pelo mapa abaixo. É literal e completo:
 nenhuma coluna fica de fora, nenhuma é descartada. O motivo é prático: esse é o
 vocabulário que eu vou digitar de cabeça nos JOINs das próximas aulas, então ele
 precisa ser previsível.
 
-  geolocation_zip_code_prefix  ->  cep_prefixo
-  geolocation_lat              ->  latitude
-  geolocation_lng              ->  longitude
-  geolocation_city             ->  cidade
-  geolocation_state            ->  uf
+| Coluna no raw | Coluna no refined |
+|---|---|
+| geolocation_zip_code_prefix | cep_prefixo |
+| geolocation_lat | latitude |
+| geolocation_lng | longitude |
+| geolocation_city | cidade |
+| geolocation_state | uf |
 
 Chamo de cep_prefixo, e não de cep, de propósito: a coluna guarda só os cinco
 primeiros dígitos do CEP, não o CEP completo de oito. Conferi e todas as 1.000.163
 linhas têm exatamente cinco caracteres, com 19.015 valores distintos. O nome tem
 que deixar claro que é prefixo.
 
-3. TIPOS DE DADOS
-  cep_prefixo  continua VARCHAR
-  latitude     vira DOUBLE
-  longitude    vira DOUBLE
-  cidade       continua VARCHAR
-  uf           continua VARCHAR
+## 3. Tipos de dados
+
+| Coluna | Tipo |
+|---|---|
+| cep_prefixo | continua VARCHAR |
+| latitude | vira DOUBLE |
+| longitude | vira DOUBLE |
+| cidade | continua VARCHAR |
+| uf | continua VARCHAR |
 
 cep_prefixo fica como texto porque é um identificador, não um número para fazer
 conta. Ninguém soma CEP. Contei 245.733 linhas com zero à esquerda, e o menor valor é
@@ -107,7 +131,8 @@ cidade e uf continuam texto porque são nome e sigla.
 
 A conversão é feita em SQL pelo DuckDB com CAST, disparado pelo Python.
 
-4. CONVERSÃO QUE FALHA
+## 4. Conversão que falha
+
 Usar CAST puro, que para tudo e estoura erro na hora se um valor não converter. Nada
 de TRY_CAST, que transformaria a falha em NULL silencioso. Converter falha em nulo é
 a forma mais calada de perder dado: os nulos que já existem no dado se misturariam
@@ -120,7 +145,8 @@ longitude. A regra existe para a próxima carga: se amanhã chegar uma coordenad
 escrita errada, eu quero o erro na cara, não um nulo inventado escondido no meio de
 um milhão de linhas.
 
-5. DUPLICATAS
+## 5. Duplicatas
+
 Chave de deduplicação: a linha inteira, ou seja, as cinco colunas juntas
 (cep_prefixo, latitude, longitude, cidade, uf). Quando a linha inteira se repete,
 mantenho uma só ocorrência com SELECT DISTINCT e conto quantas joguei fora.
@@ -131,14 +157,15 @@ grupos de linhas repetidas, e o maior deles tem 314 cópias da mesma linha. Isso
 redundância de coleta: o mesmo ponto de GPS registrado várias vezes. Tirar a
 repetição exata não perde informação nenhuma.
 
-O que eu NÃO faço, e isto é decisão, não esquecimento: não reduzo por cep_prefixo nem
+O que eu não faço, e isto é decisão, não esquecimento: não reduzo por cep_prefixo nem
 por par de coordenadas. Como provei na seção do grão, nenhum dos dois é chave. Um
 prefixo cobre uma área inteira com vários pontos legítimos, e o mesmo par de
 coordenadas aparece ligado a prefixos diferentes. Reduzir por qualquer um deles
 jogaria fora ponto de verdade, e além disso seria agregação, que não é trabalho de
 refined.
 
-6. NULOS
+## 6. Nulos
+
 Nenhuma linha é apagada por ter nulo, e nenhum nulo é preenchido.
 
 Motivo: contei zero nulos nas cinco colunas, então hoje não há o que tratar. A regra
@@ -147,7 +174,8 @@ qualquer coisa, como o centro da cidade ou o ponto vizinho, seria inventar uma
 localização que não foi medida. Prefiro deixar nulo e saber que falta, a inventar um
 valor que parece certo e não é.
 
-7. ANOMALIAS QUE EU VI, E A DECISÃO FECHADA SOBRE CADA UMA
+## 7. Anomalias que eu vi, e a decisão fechada sobre cada uma
+
 Estas coisas apareceram na investigação. Não deixo nenhuma em aberto para a IA
 decidir: a decisão, nos três casos, é manter o dado como está e registrar que eu vi.
 Manter é uma decisão legítima aqui, porque corrigir sem uma referência externa
@@ -164,10 +192,14 @@ grafia nem tirar acento. Não tenho um cadastro oficial de municípios para dize
 mesma. Padronização de cidade, se for preciso, é outra etapa com fonte externa.
 
 Coordenadas fora do Brasil. As faixas globais estão todas certas: zero latitude fora
-de [-90, 90] e zero longitude fora de [-180, 180]. Mas tem 1.336 latitudes positivas,
-3 longitudes positivas, e 31 linhas caem fora de uma janela aproximada do Brasil
-(latitude entre -34 e 6, longitude entre -74 e -28). Um exemplo é o CEP 28155, em
-santa maria, RJ, que aparece com coordenada lá na Itália. Decisão: mantenho essas
+de [-90, 90] e zero longitude fora de [-180, 180]. Atenção a um ponto que parece
+anomalia e não é: latitude positiva, sozinha, não é erro. O norte do Brasil fica
+acima da linha do Equador, então Roraima, Amapá e parte do Pará têm latitude
+positiva de verdade. Por isso as 1.336 latitudes positivas não são, por si só,
+suspeitas. O que de fato não cabe no país são as 3 longitudes positivas, impossíveis
+em território brasileiro, e as 31 linhas que caem fora de uma janela aproximada do
+Brasil (latitude entre -34 e 6, longitude entre -74 e -28). Um exemplo é o CEP 28155,
+em santa maria, RJ, que aparece com coordenada lá na Itália. Decisão: mantenho essas
 linhas como estão, sem apagar e sem corrigir. A janela que usei é só triagem, não é
 o limite oficial do Brasil, e sem uma malha geográfica de verdade eu não sei qual é
 o valor certo. Apagar seria perder dado; corrigir seria chutar.
@@ -180,38 +212,47 @@ mantenho tudo como está. Parece erro de digitação da sigla, mas eu não elejo
 maioria de forma automática, porque isso de novo seria decidir sem fonte oficial, e
 porque não é papel da refined resolver conflito de cadastro.
 
-8. SAÍDA NA TELA
+## 8. Saída na tela
+
 Uma linha por tabela, com o nome qualificado e o total gravado formatado com ponto
 de milhar:
-  refined.geolocalizacao: 1.000.163 -> 738.332 linhas (261.831 duplicatas removidas)
+
+```
+refined.geolocalizacao: 1.000.163 -> 738.332 linhas (261.831 duplicatas removidas)
+```
+
 A linha de nulos é omitida, porque não há nulos. A saída padrão é reconfigurada para
 utf-8, para os acentos dos nomes de cidade saírem certos.
 
-9. REEXECUÇÃO
+## 9. Reexecução
+
 CREATE OR REPLACE TABLE, nunca append. Rodar dez vezes dá o mesmo resultado que rodar
 uma. Conferência: duas execuções seguidas imprimem exatamente as mesmas 738.332
 linhas e as mesmas 261.831 duplicatas.
 
-10. ERRO DE PRÉ-REQUISITO
-Antes de transformar, verificar se raw.geolocalizacao existe. Se não existir, a
+## 10. Erro de pré-requisito
+
+Antes de transformar, verificar se `raw.geolocalizacao` existe. Se não existir, a
 mensagem manda rodar "uv run python -m pipeline.ingestao" e o script encerra com
 sys.exit(1). É mais honesto do que estourar um erro de tabela inexistente no meio da
 conversão.
 
-CRITÉRIOS DE ACEITE
-- refined.geolocalizacao criada com 738.332 linhas.
-- 261.831 duplicatas removidas, e 738.332 + 261.831 confere com as 1.000.163 de
-  entrada.
-- DESCRIBE mostra DOUBLE em latitude e longitude, e VARCHAR em cep_prefixo, cidade
-  e uf.
-- cep_prefixo mantém o zero à esquerda, por exemplo 01001, e todas as linhas seguem
-  com cinco dígitos.
-- Zero nulos continuam zero depois da transformação.
-- latitude sempre entre -90 e 90, longitude sempre entre -180 e 180.
-- Nenhuma agregação na saída: a tabela continua no grão de ponto de GPS, não uma
-  linha por CEP nem por cidade.
-- Rodar duas vezes seguidas imprime exatamente a mesma coisa.
+## Critérios de aceite
 
-O QUE EU ASSUMI E NÃO ESTAVA NA FONTE
+- [ ] refined.geolocalizacao criada com 738.332 linhas.
+- [ ] 261.831 duplicatas removidas, e 738.332 + 261.831 confere com as 1.000.163 de entrada.
+- [ ] DESCRIBE mostra DOUBLE em latitude e longitude, e VARCHAR em cep_prefixo, cidade e uf.
+- [ ] cep_prefixo mantém o zero à esquerda, por exemplo 01001, e todas as linhas seguem com cinco dígitos.
+- [ ] Zero nulos continuam zero depois da transformação.
+- [ ] latitude sempre entre -90 e 90, longitude sempre entre -180 e 180.
+- [ ] Nenhuma agregação na saída: a tabela continua no grão de ponto de GPS, não uma linha por CEP nem por cidade.
+- [ ] Rodar duas vezes seguidas imprime exatamente a mesma coisa.
+
+## O que eu assumi e não estava na fonte
+
 Lista vazia. Toda decisão desta spec, inclusive a de manter as anomalias, está
 escrita com o seu motivo e o seu número. Não deixei nada para a IA decidir sozinha.
+
+---
+
+Repositório: https://github.com/Nayanearaujo/olist-pipeline
