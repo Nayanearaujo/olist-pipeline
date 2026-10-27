@@ -37,7 +37,9 @@ SELECT
     uf,
     ROUND(receita, 2) AS receita,
     ROW_NUMBER() OVER (ORDER BY receita DESC, vendedor_id)                       AS posicao,
-    ROUND(SUM(receita) OVER (ORDER BY receita DESC, vendedor_id)
+    -- frame explicito (do primeiro ate o atual) para o acumulado nao depender do padrao
+    ROUND(SUM(receita) OVER (ORDER BY receita DESC, vendedor_id
+                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
           * 100.0 / SUM(receita) OVER (), 2)                                     AS pct_acumulado
 FROM vendedor_uf
 ORDER BY posicao;

@@ -35,7 +35,9 @@ alvos do guia da aula 3.
 - Mart 07: a soma do valor (R$ 15.739.137,01) passa da receita do mart 01
   (R$ 13.494.400,74) porque valor pago inclui frete e parcelas, enquanto receita é
   só o preço dos itens. E a soma de pedidos passa dos válidos porque um pedido pago
-  com cartão e voucher é contado em dois tipos.
+  com cartão e voucher é contado em dois tipos. O mart tem 4 linhas, não 5: existe um
+  tipo `not_defined`, mas os seus 3 pagamentos estão todos em pedidos não válidos, e
+  o filtro de pedido válido os deixa de fora.
 - Mart 08: a nota é por pedido, então tiro a média das avaliações de cada pedido
   antes de agrupar por prazo. E comparo `data_entrega::DATE <= data_entrega_prevista`,
   senão uma entrega no dia previsto, mas de tarde, viraria atraso.

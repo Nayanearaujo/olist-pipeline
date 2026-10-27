@@ -6,6 +6,9 @@
 -- Importante: contamos da data_compra ate a data_entrega, que e o tempo que o
 -- cliente espera. Partir da data_envio mediria o tempo da transportadora, nao
 -- o da loja.
+-- Conferi: nenhum pedido entregue tem data de entrega anterior a de compra (zero
+-- dias negativos), entao nao preciso de filtro para isso e os 96.470 entregues
+-- continuam todos no denominador.
 
 WITH entregas AS (
     -- grao: um pedido delivered com data de entrega, com os dias ate chegar e a UF

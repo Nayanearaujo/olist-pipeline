@@ -17,7 +17,7 @@
 WITH pagamentos_validos AS (
     -- grao: um pagamento (pedido_id, pagamento_seq) de um pedido valido
     SELECT
-        pg.tipo_pagamento,
+        pg.tipo,
         pg.pedido_id,
         pg.valor
     FROM refined.pagamentos AS pg
@@ -27,11 +27,11 @@ WITH pagamentos_validos AS (
 
 -- grao: um tipo de pagamento
 SELECT
-    tipo_pagamento                                           AS tipo,
+    tipo,
     COUNT(*)                                                 AS pagamentos,
     COUNT(DISTINCT pedido_id)                                AS pedidos,
     ROUND(SUM(valor), 2)                                     AS valor,
     ROUND(SUM(valor) * 100.0 / SUM(SUM(valor)) OVER (), 1)   AS pct_valor
 FROM pagamentos_validos
-GROUP BY tipo_pagamento
+GROUP BY tipo
 ORDER BY valor DESC;
