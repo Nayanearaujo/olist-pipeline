@@ -17,4 +17,6 @@ __pycache__/
 Thumbs.db
 
 # material interno do instrutor
-specs/
+specs/*
+# exceção: minha entrega do desafio 2 fica versionada
+!specs/geolocalizacao.md
