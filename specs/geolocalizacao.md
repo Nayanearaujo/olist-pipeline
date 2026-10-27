@@ -6,6 +6,7 @@
 - O grão é a observação de GPS: uma linha é um ponto coletado, com prefixo de CEP, coordenada, cidade e UF.
 - A tabela não tem chave única natural: nenhum candidato de coluna chega ao total de linhas.
 - Não há agregação aqui; agregar por CEP, cidade ou estado é trabalho da camada mart.
+- Aviso de uso: juntar esta tabela com clientes pelo CEP multiplica as linhas por cerca de 150, então quem for cruzar precisa agregar antes.
 - Contagens: 1.000.163 linhas de entrada, 738.332 distintas, 261.831 duplicatas removidas.
 
 ## Contexto
@@ -72,6 +73,31 @@ a mesma observação completa se repete. Então o grão de trabalho desta transf
 é a linha inteira distinta: cada ponto de GPS único, com o seu prefixo, cidade e UF.
 A dedup remove só a repetição exata da linha inteira. Não escolho uma linha por CEP
 nem uma por coordenada, porque isso seria agregar, e agregar é camada mart.
+
+### O cuidado de quem for usar esta tabela: o JOIN pelo CEP multiplica linhas
+
+Esta observação não muda nenhuma regra da transformação, mas é o aviso mais
+importante para quem consumir a tabela depois, então deixo registrado aqui. Como o
+cep_prefixo não é chave (um prefixo tem muitos pontos), ligar a geolocalização aos
+clientes direto pelo CEP infla o resultado. Contei:
+
+- `clientes` tem 99.441 linhas.
+- `clientes JOIN geolocalizacao ON cep_prefixo` tem 15.083.455 linhas, cerca de
+  151,7 vezes mais.
+
+Qualquer soma ou média feita depois desse JOIN sai multiplicada por cerca de 150, e
+não aparece erro nenhum na tela. Por isso, quem precisar de uma localização por
+cliente tem que reduzir a geolocalização a um ponto por CEP antes de juntar, e esse
+passo de reduzir é agregação, ou seja, trabalho de um mart, não desta transformação.
+A refined entrega os pontos no grão de observação; escolher um ponto por CEP é
+decisão de outra pergunta, em outra camada.
+
+Registro também, com a unidade ao lado de cada número para não virar contagem
+ambígua: existem 157 prefixos de CEP de cliente que não têm nenhum ponto na
+geolocalização, e nesses prefixos moram 278 clientes. São duas contagens diferentes,
+de coisas diferentes (prefixos distintos contra clientes), e não é problema desta
+transformação resolver, mas quem for cruzar as tabelas precisa saber que esse
+buraco existe.
 
 ## 1. Escopo
 
@@ -181,6 +207,10 @@ decidir: a decisão, nos três casos, é manter o dado como está e registrar qu
 Manter é uma decisão legítima aqui, porque corrigir sem uma referência externa
 confiável seria inventar valor, e inventar é pior que manter o fato torto.
 
+Uma convenção, para nenhum número desta seção ficar ambíguo: toda contagem aqui é
+sobre linhas totais da tabela, contando cada linha repetida, e não sobre linhas
+distintas. Onde a definição muda o número, eu digo a definição ao lado.
+
 Grafia de cidade. São 8.011 nomes distintos de cidade. Caindo para minúsculas e
 tirando espaços sobra 8.010, e tirando acento sobra 5.968. Ou seja, a mesma cidade
 aparece escrita de jeitos diferentes: "sao paulo" com 135.799 linhas e "são paulo"
@@ -196,22 +226,27 @@ de [-90, 90] e zero longitude fora de [-180, 180]. Atenção a um ponto que pare
 anomalia e não é: latitude positiva, sozinha, não é erro. O norte do Brasil fica
 acima da linha do Equador, então Roraima, Amapá e parte do Pará têm latitude
 positiva de verdade. Por isso as 1.336 latitudes positivas não são, por si só,
-suspeitas. O que de fato não cabe no país são as 31 linhas que caem fora de uma
-janela aproximada do Brasil (latitude entre -34 e 6, longitude entre -74 e -28),
-entre elas 3 com longitude positiva, que é impossível em território brasileiro. Um
-exemplo é o CEP 28155, em santa maria, RJ, que aparece com coordenada lá na Itália.
-Decisão: mantenho essas
-linhas como estão, sem apagar e sem corrigir. A janela que usei é só triagem, não é
-o limite oficial do Brasil, e sem uma malha geográfica de verdade eu não sei qual é
-o valor certo. Apagar seria perder dado; corrigir seria chutar.
+suspeitas. O que de fato não cabe no país são as 31 linhas (totais) que caem fora de
+uma janela aproximada do Brasil, definida como latitude entre -34 e 6 e longitude
+entre -74 e -28, contando a linha que tem latitude fora OU longitude fora. Dessas 31,
+3 têm longitude positiva, que é impossível em território brasileiro, então as 3 já
+estão dentro das 31, não somadas a elas. O número muda conforme a definição: se eu
+contasse só latitude fora seriam outras linhas, se contasse sobre linhas distintas
+seriam 27; escolhi linhas totais com a janela acima, e é essa a definição que vale
+aqui. Um exemplo é o CEP 28155, em santa maria, RJ, que aparece com coordenada lá na
+Itália. Decisão: mantenho essas linhas como estão, sem apagar e sem corrigir. A
+janela que usei é só triagem, não é o limite oficial do Brasil, e sem uma malha
+geográfica de verdade eu não sei qual é o valor certo. Apagar seria perder dado;
+corrigir seria chutar.
 
-CEP em mais de uma UF. Oito prefixos de CEP aparecem ligados a duas UFs diferentes.
-Em todos os oito o padrão é o mesmo: uma UF com quase todas as linhas e a outra com
-uma ou poucas. Por exemplo, o 04011 tem 178 linhas em SP e 1 em AC. Além desses, 550
-prefixos têm mais de uma grafia de cidade mesmo depois de normalizar. Decisão:
-mantenho tudo como está. Parece erro de digitação da sigla, mas eu não elejo a UF da
-maioria de forma automática, porque isso de novo seria decidir sem fonte oficial, e
-porque não é papel da refined resolver conflito de cadastro.
+CEP em mais de uma UF. A unidade aqui é prefixo distinto, não linha: 8 prefixos de
+CEP distintos aparecem ligados a mais de uma UF. Em todos os 8 o padrão é o mesmo:
+uma UF com quase todas as linhas e a outra com uma ou poucas. Por exemplo, o 04011
+tem 178 linhas em SP e 1 em AC. Ainda contando prefixos distintos, 550 deles têm mais
+de uma grafia de cidade mesmo depois de normalizar (minúsculas, sem espaço, sem
+acento). Decisão: mantenho tudo como está. Parece erro de digitação da sigla, mas eu
+não elejo a UF da maioria de forma automática, porque isso de novo seria decidir sem
+fonte oficial, e porque não é papel da refined resolver conflito de cadastro.
 
 ## 8. Saída na tela
 
