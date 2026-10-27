@@ -196,10 +196,11 @@ de [-90, 90] e zero longitude fora de [-180, 180]. Atenção a um ponto que pare
 anomalia e não é: latitude positiva, sozinha, não é erro. O norte do Brasil fica
 acima da linha do Equador, então Roraima, Amapá e parte do Pará têm latitude
 positiva de verdade. Por isso as 1.336 latitudes positivas não são, por si só,
-suspeitas. O que de fato não cabe no país são as 3 longitudes positivas, impossíveis
-em território brasileiro, e as 31 linhas que caem fora de uma janela aproximada do
-Brasil (latitude entre -34 e 6, longitude entre -74 e -28). Um exemplo é o CEP 28155,
-em santa maria, RJ, que aparece com coordenada lá na Itália. Decisão: mantenho essas
+suspeitas. O que de fato não cabe no país são as 31 linhas que caem fora de uma
+janela aproximada do Brasil (latitude entre -34 e 6, longitude entre -74 e -28),
+entre elas 3 com longitude positiva, que é impossível em território brasileiro. Um
+exemplo é o CEP 28155, em santa maria, RJ, que aparece com coordenada lá na Itália.
+Decisão: mantenho essas
 linhas como estão, sem apagar e sem corrigir. A janela que usei é só triagem, não é
 o limite oficial do Brasil, e sem uma malha geográfica de verdade eu não sei qual é
 o valor certo. Apagar seria perder dado; corrigir seria chutar.
