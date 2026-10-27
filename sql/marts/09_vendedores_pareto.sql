@@ -1,45 +1,55 @@
--- Grao do resultado: uma linha por vendedor com venda valida.
--- Pergunta: que fracao dos vendedores faz 80% da receita? (curva de Pareto)
--- Do maior para o menor, com a receita acumulada ate cada vendedor.
--- O passo novo e a janela com ordem: SUM(...) OVER (ORDER BY ...) soma da
--- primeira linha ate a atual, por isso o acumulado.
+-- ============================================================================
+-- Mart 09: Concentracao de vendedores (curva de Pareto)
+-- Grao final: uma linha por vendedor com venda valida.
+-- Pergunta: que fracao dos vendedores faz 80% da receita?
+-- Definicoes fechadas: pedido valido = status fora de ('canceled','unavailable');
+-- receita = soma de itens_pedido.preco, sem frete.
+--
+-- O passo novo e a janela ordenada: SUM(receita) OVER (ORDER BY ...) soma da
+-- primeira linha ate a linha atual, dando a receita acumulada da curva.
 -- Desempate: ha vendedores com receita identica. Sem um criterio de desempate
--- no ORDER BY, eles receberiam o mesmo acumulado e rodar duas vezes poderia dar
--- ordem diferente. Desempatamos por vendedor_id, que e unico, para a saida ser
--- sempre a mesma.
--- Palavras fechadas: pedido valido = status NOT IN ('canceled','unavailable');
--- receita = soma de preco, sem frete.
+-- no ORDER BY da janela, eles receberiam o mesmo acumulado e a ordem poderia
+-- mudar entre execucoes. Desempato por vendedor_id, que e unico, para a saida
+-- ser sempre a mesma.
+-- ============================================================================
 
-WITH receita_por_vendedor AS (
-    -- grao: um vendedor, com a receita dos seus itens em pedidos validos
+WITH receita_de_cada_vendedor AS (
+    -- Mudanca de grao: de item para vendedor. Receita de cada vendedor em
+    -- pedidos validos, com a sua UF.
     SELECT
-        i.vendedor_id,
-        SUM(i.preco)  AS receita
-    FROM refined.itens_pedido AS i
-    JOIN refined.pedidos      AS p ON p.pedido_id = i.pedido_id
-    WHERE p.status NOT IN ('canceled', 'unavailable')
-    GROUP BY i.vendedor_id
+        item.vendedor_id,
+        vnd.uf,
+        SUM(item.preco) AS receita
+    FROM refined.itens_pedido AS item
+    JOIN refined.pedidos      AS ped ON ped.pedido_id = item.pedido_id
+    JOIN refined.vendedores   AS vnd ON vnd.vendedor_id = item.vendedor_id
+    WHERE ped.status NOT IN ('canceled', 'unavailable')
+    GROUP BY item.vendedor_id, vnd.uf
 ),
 
-vendedor_uf AS (
-    -- grao: um vendedor, com a sua receita e a sua UF
+curva AS (
+    -- Mesmo grao (um vendedor), agora com posicao no ranking e receita acumulada.
+    -- O frame da janela acumulada e escrito por extenso para nao depender do padrao.
     SELECT
-        r.vendedor_id,
-        v.uf,
-        r.receita
-    FROM receita_por_vendedor AS r
-    JOIN refined.vendedores   AS v ON v.vendedor_id = r.vendedor_id
+        vendedor_id,
+        uf,
+        receita,
+        ROW_NUMBER() OVER (ORDER BY receita DESC, vendedor_id) AS posicao,
+        SUM(receita) OVER (
+            ORDER BY receita DESC, vendedor_id
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS receita_ate_aqui,
+        SUM(receita) OVER () AS receita_total
+    FROM receita_de_cada_vendedor
 )
 
--- grao: um vendedor, ordenado do maior para o menor, com posicao e acumulado
+-- Grao: um vendedor, do maior para o menor. pct_acumulado vai ate 100,00 na
+-- ultima linha.
 SELECT
     vendedor_id,
     uf,
-    ROUND(receita, 2) AS receita,
-    ROW_NUMBER() OVER (ORDER BY receita DESC, vendedor_id)                       AS posicao,
-    -- frame explicito (do primeiro ate o atual) para o acumulado nao depender do padrao
-    ROUND(SUM(receita) OVER (ORDER BY receita DESC, vendedor_id
-                             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
-          * 100.0 / SUM(receita) OVER (), 2)                                     AS pct_acumulado
-FROM vendedor_uf
+    ROUND(receita, 2)                                   AS receita,
+    posicao,
+    ROUND(100.0 * receita_ate_aqui / receita_total, 2)  AS pct_acumulado
+FROM curva
 ORDER BY posicao;

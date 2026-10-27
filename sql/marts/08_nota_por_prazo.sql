@@ -1,52 +1,58 @@
--- Grao do resultado: uma linha por situacao de entrega (no_prazo ou atrasado).
--- Pergunta: o atraso derruba a nota?
--- Mesmo denominador do mart 03: so pedido delivered com data de entrega.
--- Combina duas ideias: a nota por pedido (como no mart 04) e o CASE de prazo
--- (como no mart 03).
--- Armadilha do grao: a nota e do pedido, nao da avaliacao. Um pedido com duas
--- avaliacoes nao pode pesar o dobro, entao tiramos a media das notas por pedido
--- antes de agrupar por situacao.
--- Armadilha do tipo: data_entrega e TIMESTAMP e data_entrega_prevista e DATE.
--- Comparar direto transforma a prevista em meia-noite, e uma entrega as 15h do
--- dia previsto viraria "atrasada". Por isso comparamos data_entrega::DATE.
+-- ============================================================================
+-- Mart 08: A nota de quem recebeu atrasado
+-- Grao final: uma linha por situacao de entrega ('no_prazo' ou 'atrasado').
+-- Pergunta: o atraso derruba a nota do cliente?
+-- Denominador: so pedido delivered com data de entrega, o mesmo do mart 03.
+-- Este mart junta duas ideias ja vistas: a nota por pedido (mart 04) e a
+-- classificacao de prazo com CASE (mart 03).
+--
+-- Dois cuidados que mudam o numero sem dar erro na tela:
+--   Grao da nota: a nota e do pedido, nao da avaliacao. Um pedido com duas
+--     avaliacoes nao pode pesar o dobro, entao tiro a media das notas por
+--     pedido antes de classificar por prazo.
+--   Tipo da data: data_entrega e TIMESTAMP e data_entrega_prevista e DATE.
+--     Comparo data_entrega::DATE, senao uma entrega as 15h do dia previsto
+--     viraria 'atrasado' por causa das horas.
+-- ============================================================================
 
-WITH nota_por_pedido AS (
-    -- grao: um pedido avaliado, com a media das suas avaliacoes
+WITH media_de_nota_por_pedido AS (
+    -- Mudanca de grao: de avaliacao para pedido. Media das avaliacoes do pedido.
     SELECT
         pedido_id,
-        AVG(nota) AS nota
+        AVG(nota) AS nota_do_pedido
     FROM refined.avaliacoes
     GROUP BY pedido_id
 ),
 
-pedidos_entregues AS (
-    -- grao: um pedido delivered com data de entrega, ja classificado por prazo
+entrega_classificada AS (
+    -- Grao: um pedido entregue com data, ja rotulado como no_prazo ou atrasado.
     SELECT
-        p.pedido_id,
+        ped.pedido_id,
         CASE
-            WHEN p.data_entrega::DATE <= p.data_entrega_prevista THEN 'no_prazo'
+            WHEN ped.data_entrega::DATE <= ped.data_entrega_prevista THEN 'no_prazo'
             ELSE 'atrasado'
         END AS situacao
-    FROM refined.pedidos AS p
-    WHERE p.status = 'delivered'
-      AND p.data_entrega IS NOT NULL
+    FROM refined.pedidos AS ped
+    WHERE ped.status = 'delivered'
+      AND ped.data_entrega IS NOT NULL
 ),
 
-pedido_situacao_nota AS (
-    -- grao: um pedido, com situacao de prazo e a sua nota
+pedido_avaliado_e_classificado AS (
+    -- Grao: um pedido entregue que tambem foi avaliado, com situacao e nota.
     SELECT
-        e.situacao,
-        n.nota
-    FROM pedidos_entregues AS e
-    JOIN nota_por_pedido   AS n ON n.pedido_id = e.pedido_id
+        ec.situacao,
+        mn.nota_do_pedido
+    FROM entrega_classificada       AS ec
+    JOIN media_de_nota_por_pedido   AS mn ON mn.pedido_id = ec.pedido_id
 )
 
--- grao: uma situacao de entrega
+-- Mudanca de grao: de pedido para situacao. pct_nota_baixa = % de pedidos da
+-- situacao com nota media ate 2.
 SELECT
     situacao,
     COUNT(*)                                                      AS pedidos_avaliados,
-    ROUND(AVG(nota), 2)                                           AS nota_media,
-    ROUND(COUNT(*) FILTER (WHERE nota <= 2) * 100.0 / COUNT(*), 1) AS pct_nota_baixa
-FROM pedido_situacao_nota
+    ROUND(AVG(nota_do_pedido), 2)                                 AS nota_media,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE nota_do_pedido <= 2) / COUNT(*), 1) AS pct_nota_baixa
+FROM pedido_avaliado_e_classificado
 GROUP BY situacao
 ORDER BY situacao;

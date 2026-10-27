@@ -1,32 +1,36 @@
--- Grao do resultado: uma linha por UF do cliente.
--- Pergunta: quantos dias, da compra ate a entrega, por estado?
--- Mesmo denominador do mart 03: so pedido delivered com data de entrega.
+-- ============================================================================
+-- Mart 10: Tempo de entrega por estado
+-- Grao final: uma linha por UF do cliente.
+-- Pergunta: quantos dias, da compra ate a entrega, em cada estado?
+-- Denominador: so pedido delivered com data de entrega, o mesmo do mart 03.
 -- O passo novo sao duas funcoes: date_diff('day', inicio, fim), que conta dias
--- de calendario, e median().
--- Importante: contamos da data_compra ate a data_entrega, que e o tempo que o
--- cliente espera. Partir da data_envio mediria o tempo da transportadora, nao
--- o da loja.
--- Conferi: nenhum pedido entregue tem data de entrega anterior a de compra (zero
--- dias negativos), entao nao preciso de filtro para isso e os 96.470 entregues
--- continuam todos no denominador.
+-- de calendario, e median(), a mediana dos dias.
+--
+-- Decisao de inicio da contagem: conto da data_compra ate a data_entrega, que
+-- e o tempo que o cliente de fato espera. Se eu partisse da data de envio,
+-- estaria medindo o tempo da transportadora, nao o da loja, que e outra
+-- pergunta. Conferi tambem que nenhum pedido entregue tem data de entrega
+-- anterior a de compra, entao nao ha dia negativo e os 96.470 entregues ficam
+-- todos no calculo.
+-- ============================================================================
 
-WITH entregas AS (
-    -- grao: um pedido delivered com data de entrega, com os dias ate chegar e a UF
+WITH espera_de_cada_entrega AS (
+    -- Grao: um pedido entregue, com os dias ate chegar e a UF do cliente.
     SELECT
-        c.uf,
-        date_diff('day', p.data_compra, p.data_entrega) AS dias
-    FROM refined.pedidos  AS p
-    JOIN refined.clientes AS c ON c.cliente_id = p.cliente_id
-    WHERE p.status = 'delivered'
-      AND p.data_entrega IS NOT NULL
+        cli.uf,
+        date_diff('day', ped.data_compra, ped.data_entrega) AS dias
+    FROM refined.pedidos  AS ped
+    JOIN refined.clientes AS cli ON cli.cliente_id = ped.cliente_id
+    WHERE ped.status = 'delivered'
+      AND ped.data_entrega IS NOT NULL
 )
 
--- grao: uma UF
+-- Mudanca de grao: de pedido para UF. Media e mediana dos dias de espera.
 SELECT
     uf,
-    COUNT(*)               AS entregues,
-    ROUND(AVG(dias), 1)    AS dias_medio,
-    median(dias)           AS dias_mediana
-FROM entregas
+    COUNT(*)            AS entregues,
+    ROUND(AVG(dias), 1) AS dias_medio,
+    median(dias)        AS dias_mediana
+FROM espera_de_cada_entrega
 GROUP BY uf
 ORDER BY dias_medio DESC;
