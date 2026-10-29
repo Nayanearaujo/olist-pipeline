@@ -21,7 +21,27 @@ uv run python -m pipeline.transformacao
 uv run python -m pipeline.marts
 ```
 
-Na primeira execução o uv instala o DuckDB sozinho (está em `pyproject.toml`).
+Na primeira execução o uv instala as dependências sozinho (estão em `pyproject.toml`).
+
+### Dashboard e relatório (aula 4)
+
+```bash
+uv run streamlit run app.py     # painel interativo em http://localhost:8501
+uv run python relatorio.py      # gera relatorio.html, abre sem servidor
+```
+
+A tela nunca calcula: todo número sai pronto de um mart. `painel.py` lê os
+marts e desenha; `app.py` só arruma na tela; `relatorio.py` congela o mesmo
+painel num HTML.
+
+### Testes
+
+```bash
+uv run pytest --cov
+```
+
+Testes unitários com dado inventado (nunca o banco do projeto), meta de 60% de
+cobertura. Ficam em `test/`.
 
 ## O que esperar na tela
 
@@ -40,6 +60,8 @@ imprime os dez marts:
   marts.nota_por_prazo              2 linhas
   marts.vendedores_pareto       3.053 linhas
   marts.tempo_entrega_por_estado   27 linhas
+  marts.kpis                        1 linha
+  marts.clientes_por_uf            27 linhas
 ```
 
 ## Estrutura
@@ -52,9 +74,15 @@ olist-pipeline/
 │   ├── transformacao.py  refined: tipa e deduplica 8 tabelas
 │   └── marts.py          marts: executa cada sql/marts/*.sql
 ├── sql/marts/
-│   ├── 01_vendas_mensais.sql ... 05_recompra.sql   (marts base)
-│   └── 06_...sql ... 10_...sql                      (desafio 3)
-├── raw/                  os 9 CSVs comprimidos
+│   ├── 01_vendas_mensais.sql ... 05_recompra.sql   (marts base, aula 3)
+│   ├── 06_...sql ... 10_...sql                      (desafio da aula 3)
+│   └── 11_kpis.sql, 12_clientes_por_uf.sql          (aula 4)
+├── painel.py            leitura dos marts, formato e gráficos (sem cálculo)
+├── app.py               dashboard Streamlit (só arruma na tela)
+├── relatorio.py         gera relatorio.html com os mesmos gráficos
+├── design/rascunho.md   o desenho da tela antes do código
+├── test/                testes unitários com pytest (dado inventado)
+├── raw/                 os 9 CSVs comprimidos
 └── pyproject.toml
 ```
 
