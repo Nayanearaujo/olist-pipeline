@@ -39,3 +39,15 @@ Números conferidos sobre o dado do curso. Cada mart bate com o guia da aula 3.
 - Soma de entregues: 96.470
 - Mais rápido: SP (8,7 dias) | Mais lento: RR (29,3 dias)
 
+
+## 11 KPIs da operação (cartões do dashboard)
+
+- Linhas: 1
+- ticket_medio R$ 137,42 · ticket_mediana R$ 86,90 · pct_frete 14,2%
+- pct_cancelados 0,63% · dias_entrega 12,5 · dias_entrega_mediana 10 · nota_media 4,09
+
+## 12 Clientes por estado
+
+- Linhas (UFs): 27
+- SP 40.302 · RJ 12.384 · MG 11.259
+- Soma da coluna clientes: 96.136 (39 pessoas em mais de uma UF; não é total)
